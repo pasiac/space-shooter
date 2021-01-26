@@ -132,26 +132,26 @@ class EnemiesFactory():
     def get_enemy(enemy_type):
         try:
             if enemy_type == "asteroid":
-                if random.random() < 0.1 and len(asteroids) < 8:
+                if random.random() < 0.05 and len(asteroids) < 8:
                     asteroid = Asteroid(asteroid_img, asteroid_width)
                     asteroids.append(asteroid)
                     all_sprites.add(asteroids)
                     return asteroid
             elif enemy_type == "big_asteroid":
-                if random.random() < 0.05 and len(big_asteroids) < 3 and asteroid_kill_count > 49:
+                if random.random() < 0.005 and len(big_asteroids) < 3 and asteroid_kill_count > 49:
                     big_asteroid =  BigAsteroid()
                     big_asteroids.append(big_asteroid)
                     all_sprites.add(big_asteroid)
                     return big_asteroid
             elif enemy_type == "alien":
-                if random.random() < 0.01 and len(aliens) < 1 and asteroid_kill_count > 99:
+                if random.random() < 0.001 and len(aliens) < 1 and asteroid_kill_count > 99:
                     allien = Alien()
                     aliens.append(allien)
                     all_sprites.add(allien)
                     if len(aliens) > 0:
                         add_laser()
                     return allien
-            elif enemy_type == "boss" and len(bosses) < 1 and random.random() < 0.005:
+            elif enemy_type == "boss" and len(bosses) < 1 and random.random() < 0.0005:
                 boss = Boss()
                 global boss_spawned
                 bosses.append(boss)
@@ -346,7 +346,7 @@ class ObserverSpritesGroup:
         self.sprites.add(sprite)
 
     def remove(self, sprite):
-        self.sprites.remove(sprite
+        self.sprites.remove(sprite)
 
     def update(self, *args, **kwargs):
         self.sprites.update(*args, **kwargs)
@@ -396,12 +396,16 @@ def main():
             game_over()
         
 
-        all_sprites.draw(screen)
-        draw_text()
-        pygame.display.update()
+        fasade_display()
         
         
 
     pygame.quit()
+
+def fasade_display():
+    """Fasade design pattern in function"""
+    all_sprites.draw(screen)
+    draw_text()
+    pygame.display.update()
 
 main()
