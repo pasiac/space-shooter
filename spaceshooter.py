@@ -4,7 +4,31 @@ import sys
 from settings import *
 from abc import ABCMeta, abstractstaticmethod
 
+class ObserverSpritesGroup():
+    """ It's observer pattern mixed with decorator pattern and iterator"""
+    def __init__(self, sprites):
+        self.sprites = sprites
 
+    def add(self, sprite):
+        self.sprites.add(sprite)
+
+    def remove(self, sprite):
+        self.sprites.remove(sprite)
+
+    def update(self, *args, **kwargs):
+        self.sprites.update(*args, **kwargs)
+
+    def draw(self, *args, **kwargs):
+        self.sprites.draw(*args, **kwargs)
+
+    def __len__(self):
+        return len(self.sprites)
+        
+    def __iter__(self):
+        return iter(self.sprites)
+
+asteroids = ObserverSpritesGroup(pygame.sprite.Group())
+big_asteroids = ObserverSpritesGroup(pygame.sprite.Group())
 pygame.mixer.pre_init(44100, -16, 1, 512) #prevents sound delay
 pygame.init()
 my_font = pygame.font.SysFont("Arial", 70) #this needs to be after pygame.init()
@@ -113,19 +137,19 @@ class BigAsteroid(BaseAsteroid):
             all_sprites.remove(self)
 
 class Boss(BaseAsteroid):
-    def __init__(self):
-        super.__init__(boss_image, boss_height)
+    def __init__(self, boss_vel):
+        super().__init__(boss_image, boss_height)
         self.boss_health = boss_health
-    
+        self.boss_vel = boss_vel
     def update(self):
         if self.rect.y < HEIGHT/20:
-            self.rect.y += boss_vel
+            self.rect.y += self.boss_vel
         else:
-            self.rect.x += boss_vel
+            self.rect.x += self.boss_vel
             if self.rect.x + boss_width > WIDTH:
-                boss_vel *= -1
+                self.boss_vel *= -1
             elif self.rect.x < 0:
-                boss_vel *= -1
+                self.boss_vel *= -1
 
 class EnemiesFactory():
     @staticmethod
@@ -134,13 +158,13 @@ class EnemiesFactory():
             if enemy_type == "asteroid":
                 if random.random() < 0.05 and len(asteroids) < 8:
                     asteroid = Asteroid(asteroid_img, asteroid_width)
-                    asteroids.append(asteroid)
+                    asteroids.add(asteroid)
                     all_sprites.add(asteroids)
                     return asteroid
             elif enemy_type == "big_asteroid":
                 if random.random() < 0.005 and len(big_asteroids) < 3 and asteroid_kill_count > 49:
                     big_asteroid =  BigAsteroid()
-                    big_asteroids.append(big_asteroid)
+                    big_asteroids.add(big_asteroid)
                     all_sprites.add(big_asteroid)
                     return big_asteroid
             elif enemy_type == "alien":
@@ -152,7 +176,7 @@ class EnemiesFactory():
                         add_laser()
                     return allien
             elif enemy_type == "boss" and len(bosses) < 1 and random.random() < 0.0005:
-                boss = Boss()
+                boss = Boss(3)
                 global boss_spawned
                 bosses.append(boss)
                 boss_spawned = True
@@ -199,7 +223,7 @@ class Laser(pygame.sprite.Sprite):
                 asteroids.remove(asteroid)
                 all_sprites.remove(asteroid)
                 all_sprites.remove(self) 
-                asteroid_kill_count += 1
+                asteroid_kill_count += 100
         
         for asteroid in big_asteroids:
             if pygame.sprite.collide_rect(self, asteroid):
@@ -337,22 +361,7 @@ def title_screen():
         pygame.display.update()
 
 title_screen()
-class ObserverSpritesGroup:
-    """ It's observer pattern mixed with decorator pattern"""
-    def __init__(self, sprites: pygame.sprite.Group()):
-        self.sprites = sprites
 
-    def add(self, sprite):
-        self.sprites.add(sprite)
-
-    def remove(self, sprite):
-        self.sprites.remove(sprite)
-
-    def update(self, *args, **kwargs):
-        self.sprites.update(*args, **kwargs)
-
-    def draw(self, *args, **kwargs):
-        self.sprites.draw(*args, **kwargs)
 
 all_sprites = ObserverSpritesGroup(pygame.sprite.Group())
 all_sprites.add(Background1())
