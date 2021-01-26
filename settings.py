@@ -43,9 +43,9 @@ GREEN = (0,255,0)
 
 #loading sprites
 background = pygame.transform.scale(pygame.image.load('space_background.gif'), (WIDTH, HEIGHT)) 
-player = pygame.transform.scale(pygame.image.load('player_ship.png'), (player_width, player_width))
-asteroid = pygame.transform.scale(pygame.image.load('asteroid.png'), (asteroid_width, asteroid_width))
-big_asteroid = pygame.transform.scale(pygame.image.load('asteroid.png'), (asteroid_width*2, asteroid_width*2))
+player_img = pygame.transform.scale(pygame.image.load('player_ship.png'), (player_width, player_width))
+asteroid_img = pygame.transform.scale(pygame.image.load('asteroid.png'), (asteroid_width, asteroid_width))
+big_asteroid_img = pygame.transform.scale(pygame.image.load('asteroid.png'), (asteroid_width*2, asteroid_width*2))
 laser = pygame.transform.scale(pygame.image.load('laser.png'), (laser_width, laser_height))
 
 alien_1 = pygame.transform.scale(pygame.image.load('alien_1.png'), (alien_width, alien_width))

@@ -2,6 +2,7 @@ import pygame
 import random
 import sys
 from settings import *
+from abc import ABCMeta, abstractstaticmethod
 
 
 pygame.mixer.pre_init(44100, -16, 1, 512) #prevents sound delay
@@ -42,12 +43,12 @@ class Background2(pygame.sprite.Sprite):
 class Player(pygame.sprite.Sprite):
     def __init__(self):
         pygame.sprite.Sprite.__init__(self)
-        self.image = player
+        self.image = player_img
         self.rect = self.image.get_rect()
         self.rect.center = (WIDTH/2, HEIGHT/1.1)
     
     def update(self):
-        global player_health, count, laser_delay, counts
+        global player_health, count, laser_delay
         keys = pygame.key.get_pressed()
         if keys[pygame.K_RIGHT] and self.rect.x < WIDTH - player_width:
             self.rect.x += player_vel
@@ -80,14 +81,18 @@ class Player(pygame.sprite.Sprite):
                 player_health -= 1
 
 
-class Asteroid(pygame.sprite.Sprite):
-    def __init__(self):
+class BaseAsteroid(pygame.sprite.Sprite):
+    def __init__(self, image, asteroid_width):
         pygame.sprite.Sprite.__init__(self)
-        self.image = asteroid
+        self.image = image
         self.rect = self.image.get_rect()
         self.rect.center = (random.randrange(0, WIDTH-asteroid_width), 0)
         self.asteroid_vel = [random.randrange(-1,2), random.randrange(2, 12)]
-    
+
+    def update(self):
+        raise NotImplementedError
+
+class Asteroid(BaseAsteroid):
     def update(self):
         self.rect.y += self.asteroid_vel[1]
         self.rect.x += self.asteroid_vel[0]
@@ -95,13 +100,9 @@ class Asteroid(pygame.sprite.Sprite):
             asteroids.remove(self)
             all_sprites.remove(self)
 
-class BigAsteroid(pygame.sprite.Sprite):
+class BigAsteroid(BaseAsteroid):
     def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = big_asteroid
-        self.rect = self.image.get_rect() 
-        self.rect.center = (random.randrange(0, WIDTH-asteroid_width), 0)
-        self.asteroid_vel = [random.randrange(-1,2), random.randrange(2, 12)]
+        super().__init__(big_asteroid_img, asteroid_width)
         self.big_asteroid_health = big_asteroid_health
     
     def update(self):
@@ -111,16 +112,12 @@ class BigAsteroid(pygame.sprite.Sprite):
             big_asteroids.remove(self)
             all_sprites.remove(self)
 
-class Boss(pygame.sprite.Sprite):
+class Boss(BaseAsteroid):
     def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = boss_image
-        self.rect = self.image.get_rect()
-        self.rect.center = (WIDTH/2, -boss_height/2)
+        super.__init__(boss_image, boss_height)
         self.boss_health = boss_health
     
     def update(self):
-        global boss_vel
         if self.rect.y < HEIGHT/20:
             self.rect.y += boss_vel
         else:
@@ -130,32 +127,42 @@ class Boss(pygame.sprite.Sprite):
             elif self.rect.x < 0:
                 boss_vel *= -1
 
+class EnemiesFactory():
+    @staticmethod
+    def get_enemy(enemy_type):
+        try:
+            if enemy_type == "asteroid":
+                if random.random() < 0.1 and len(asteroids) < 8:
+                    asteroid = Asteroid(asteroid_img, asteroid_width)
+                    asteroids.append(asteroid)
+                    all_sprites.add(asteroids)
+                    return asteroid
+            elif enemy_type == "big_asteroid":
+                if random.random() < 0.05 and len(big_asteroids) < 3 and asteroid_kill_count > 49:
+                    big_asteroid =  BigAsteroid()
+                    big_asteroids.append(big_asteroid)
+                    all_sprites.add(big_asteroid)
+                    return big_asteroid
+            elif enemy_type == "alien":
+                if random.random() < 0.01 and len(aliens) < 1 and asteroid_kill_count > 99:
+                    allien = Alien()
+                    aliens.append(allien)
+                    all_sprites.add(allien)
+                    if len(aliens) > 0:
+                        add_laser()
+                    return allien
+            elif enemy_type == "boss" and len(bosses) < 1 and random.random() < 0.005:
+                boss = Boss()
+                global boss_spawned
+                bosses.append(boss)
+                boss_spawned = True
+                for boss in bosses:
+                    all_sprites.add(boss)
+                return Boss
+        #     raise AssertionError("Enemy dont found.")
+        except AssertionError as _e:
+            print(_e)
 
-def add_asteroid():
-    if random.random() < 0.1 and len(asteroids) < 8:
-        asteroids.append(Asteroid())
-        for asteroid in asteroids:
-            all_sprites.add(asteroid)
-
-def add_big_asteroid():
-    if random.random() < 0.05 and len(big_asteroids) < 3:
-        big_asteroids.append(BigAsteroid())
-        for asteroid in big_asteroids:
-            all_sprites.add(asteroid)
-
-def add_alien():
-    if random.random() < 0.01 and len(aliens) < 1:
-        aliens.append(Alien())
-        for alien in aliens:
-            all_sprites.add(alien)
-
-def add_boss():
-    global boss_spawned
-    if len(bosses) < 1 and random.random() < 0.005:
-        bosses.append(Boss())
-        boss_spawned = True
-        for boss in bosses:
-            all_sprites.add(boss)
 
 def add_laser():
     global laser_count
@@ -330,9 +337,24 @@ def title_screen():
         pygame.display.update()
 
 title_screen()
+class ObserverSpritesGroup:
+    """ It's observer pattern mixed with decorator pattern"""
+    def __init__(self, sprites: pygame.sprite.Group()):
+        self.sprites = sprites
 
+    def add(self, sprite):
+        self.sprites.add(sprite)
 
-all_sprites = pygame.sprite.Group()
+    def remove(self, sprite):
+        self.sprites.remove(sprite
+
+    def update(self, *args, **kwargs):
+        self.sprites.update(*args, **kwargs)
+
+    def draw(self, *args, **kwargs):
+        self.sprites.draw(*args, **kwargs)
+
+all_sprites = ObserverSpritesGroup(pygame.sprite.Group())
 all_sprites.add(Background1())
 all_sprites.add(Background2())
 player = Player()
@@ -354,21 +376,19 @@ def main():
         
 
         all_sprites.update()
-        add_asteroid()
+        enemies_factory = EnemiesFactory()
+        enemies_factory.get_enemy(enemy_type='asteroid')
         
         if asteroid_kill_count > 49:
-            add_big_asteroid()
+            enemies_factory.get_enemy(enemy_type='big_asteroid')
+
         
         if asteroid_kill_count > 99:
-            add_alien()
-            if len(aliens) > 0:
-                add_laser()
+            enemies_factory.get_enemy('alien')
         
         if asteroid_kill_count > 179 and not boss_spawned:
-            add_boss()
-            if len(bosses) > 0:
-                pass 
-        
+            enemies_factory.get_enemy('boss')
+
         if boss_spawned and len(bosses) < 1:
             win()
         
