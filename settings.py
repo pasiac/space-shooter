@@ -1,14 +1,24 @@
+# import pygame
+import random
+import os
 import pygame
-WIDTH = 1000
-HEIGHT = 1000
+
+SETTINGS_DIR = os.path.dirname(os.path.realpath(__file__))
+STATIC_DIR = os.path.join(SETTINGS_DIR, "statics")
+
+
+def load_scaled_image(filename, width, height):
+    return pygame.transform.scale(pygame.image.load(f"{STATIC_DIR}/sprites/{filename}"), (width, height))
+
+
+WINDOW_WIDTH = 1000
+WINDOW_HEIGHT = 1000
 FPS = 60
 
-#game constants
-player_vel = 20
+PLAYER_VELOCITY = 20
 player_width = 150
 player_health = 3
 asteroid_width = 100
-asteroid_kill_count = 0
 scrolling_speed = 5
 big_asteroid_health = 5
 laser_width = 50
@@ -34,20 +44,24 @@ boss_death_count = 0
 count = 0
 alien_frame_count = 0
 
-#defining colors
-WHITE = (255,255,255)
-BLACK = (0,0,0)
-GREEN = (0,255,0)
+# defining colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
 
-#loading sprites
-background = pygame.transform.scale(pygame.image.load('space_background.gif'), (WIDTH, HEIGHT)) 
-player_img = pygame.transform.scale(pygame.image.load('player_ship.png'), (player_width, player_width))
-asteroid_img = pygame.transform.scale(pygame.image.load('asteroid.png'), (asteroid_width, asteroid_width))
-big_asteroid_img = pygame.transform.scale(pygame.image.load('asteroid.png'), (asteroid_width*2, asteroid_width*2))
-laser = pygame.transform.scale(pygame.image.load('laser.png'), (laser_width, laser_height))
-
-alien_1 = pygame.transform.scale(pygame.image.load('alien_1.png'), (alien_width, alien_width))
-alien_2 = pygame.transform.scale(pygame.image.load('alien_2.png'), (alien_width, alien_width))
+# loading sprites
+background = load_scaled_image("space_background.gif", WINDOW_WIDTH, WINDOW_HEIGHT)
+player_img = load_scaled_image('player_ship.png', player_width, player_width)
+asteroid_img = load_scaled_image('asteroid.png', asteroid_width, asteroid_width)
+big_asteroid_img = load_scaled_image('asteroid.png', asteroid_width*2, asteroid_width*2)
+laser_img = load_scaled_image('laser.png', laser_width, laser_height)
+alien_1 = load_scaled_image('alien_1.png', alien_width, alien_width)
+alien_2 = load_scaled_image('alien_2.png', alien_width, alien_width)
 alien_sprites = [alien_1, alien_2]
+boss_image = load_scaled_image('alien_boss.png', boss_width, boss_height)
 
-boss_image = pygame.transform.scale(pygame.image.load('alien_boss.png'), (boss_width, boss_height))
+
+DEFAULT_ASTEROID_RECT_CENTER = (random.randrange(0, WINDOW_WIDTH - 100), 0)
+DEFAULT_PLAYER_RECT_CENTER = (WINDOW_WIDTH / 2, WINDOW_HEIGHT / 1.1)
+
+

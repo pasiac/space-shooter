@@ -1,420 +1,231 @@
-import pygame
 import random
-import sys
-from settings import *
-from abc import ABCMeta, abstractstaticmethod
+import pygame
+from models import ObserverSpritesGroup
+# Global variables
+from settings import background, WINDOW_HEIGHT, scrolling_speed, WINDOW_WIDTH, player_width, laser_img, laser_vel, \
+    lasers, STATIC_DIR, asteroid_img, asteroid_width, big_asteroid_img, WHITE, PLAYER_VELOCITY, \
+    DEFAULT_PLAYER_RECT_CENTER, player_img, FPS
 
-class ObserverSpritesGroup():
-    """ It's observer pattern mixed with decorator pattern and iterator"""
-    def __init__(self, sprites):
-        self.sprites = sprites
+enemies = ObserverSpritesGroup(pygame.sprite.Group())
+all_sprites = ObserverSpritesGroup(pygame.sprite.Group())
+kill_count = 0
 
-    def add(self, sprite):
-        self.sprites.add(sprite)
 
-    def remove(self, sprite):
-        self.sprites.remove(sprite)
-
-    def update(self, *args, **kwargs):
-        self.sprites.update(*args, **kwargs)
-
-    def draw(self, *args, **kwargs):
-        self.sprites.draw(*args, **kwargs)
-
-    def __len__(self):
-        return len(self.sprites)
-        
-    def __iter__(self):
-        return iter(self.sprites)
-
-asteroids = ObserverSpritesGroup(pygame.sprite.Group())
-big_asteroids = ObserverSpritesGroup(pygame.sprite.Group())
-pygame.mixer.pre_init(44100, -16, 1, 512) #prevents sound delay
-pygame.init()
-my_font = pygame.font.SysFont("Arial", 70) #this needs to be after pygame.init()
-game_over_font = pygame.font.SysFont("bell", 120, bold=True) #game over font
-win_font = pygame.font.SysFont('cambrian', 120, bold=True)
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Space Shooter")
-clock = pygame.time.Clock()
-
-class Background1(pygame.sprite.Sprite):
-    def __init__(self):
+# Models
+class Background(pygame.sprite.Sprite):
+    def __init__(self, center):
         pygame.sprite.Sprite.__init__(self)
         self.image = background
         self.rect = self.image.get_rect()
-        self.rect.center = (WIDTH/2, HEIGHT/2)
-    
+        self.rect.center = center
+
     def update(self):
-        if self.rect.y > HEIGHT:
-            self.rect.y = -HEIGHT
+        if self.rect.y > WINDOW_HEIGHT:
+            self.rect.y = -WINDOW_HEIGHT
         else:
             self.rect.y += scrolling_speed
 
-class Background2(pygame.sprite.Sprite):
-    def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = background
-        self.rect = self.image.get_rect()
-        self.rect.center = (WIDTH/2, -HEIGHT/2)
-    
-    def update(self):
-        if self.rect.y > HEIGHT:
-            self.rect.y = -HEIGHT
-        else:
-            self.rect.y += scrolling_speed
 
-class Player(pygame.sprite.Sprite):
-    def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = player_img
-        self.rect = self.image.get_rect()
-        self.rect.center = (WIDTH/2, HEIGHT/1.1)
-    
-    def update(self):
-        global player_health, count, laser_delay
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_RIGHT] and self.rect.x < WIDTH - player_width:
-            self.rect.x += player_vel
-        if keys[pygame.K_LEFT] and self.rect.x > 0:
-            self.rect.x -= player_vel
-        
-        count += 1
-        if keys[pygame.K_SPACE] and count%laser_delay == 0:
-            pygame.mixer.Channel(0).play(pygame.mixer.Sound('laser_sound.wav'))
-            all_sprites.add(Laser())
-        
-        for asteroid in asteroids:
-            if pygame.sprite.collide_rect(self, asteroid):
-                pygame.mixer.Channel(1).play(pygame.mixer.Sound('space_ship_hit.wav'))
-                asteroids.remove(asteroid)
-                all_sprites.remove(asteroid)
-                player_health -= 1
-        
-        for asteroid in big_asteroids:
-            if pygame.sprite.collide_rect(self, asteroid):
-                pygame.mixer.Channel(1).play(pygame.mixer.Sound('space_ship_hit.wav'))
-                big_asteroids.remove(asteroid)
-                all_sprites.remove(asteroid)
-                player_health -= 1
-        for laser in lasers:
-            if pygame.sprite.collide_rect(self, laser):
-                pygame.mixer.Channel(1).play(pygame.mixer.Sound('space_ship_hit.wav'))
-                lasers.remove(laser)
-                all_sprites.remove(laser)
-                player_health -= 1
+class BaseSpaceShip:
+    def __init__(self, health, vel, cooldown, laser=None):
+        self.health = health
+        self.vel = vel
+        self.laser = laser
+        self.cooldown = cooldown
 
 
-class BaseAsteroid(pygame.sprite.Sprite):
-    def __init__(self, image, asteroid_width):
+class BaseSprite(pygame.sprite.Sprite):
+    def __init__(self, image, rect_center):
         pygame.sprite.Sprite.__init__(self)
         self.image = image
         self.rect = self.image.get_rect()
-        self.rect.center = (random.randrange(0, WIDTH-asteroid_width), 0)
-        self.asteroid_vel = [random.randrange(-1,2), random.randrange(2, 12)]
+        self.rect.center = rect_center
+
+
+class PlayerSprite(BaseSprite):
+    def __init__(self, spaceship: BaseSpaceShip, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.spaceship = spaceship
+        self.last_laser_use = pygame.time.get_ticks()
 
     def update(self):
-        raise NotImplementedError
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_RIGHT] and self.rect.x < WINDOW_WIDTH - player_width:
+            self.rect.x += self.spaceship.vel
+        if keys[pygame.K_LEFT] and self.rect.x > 0:
+            self.rect.x -= self.spaceship.vel
 
-class Asteroid(BaseAsteroid):
+        if keys[pygame.K_SPACE]:
+            laser = LaserSprite(image=laser_img, rect_center=self.rect.center)
+            self.last_laser_use = laser.shoot(self.last_laser_use)
+
+        self._check_collision()
+
+    def _check_collision(self):
+        for enemy in enemies:
+            if pygame.sprite.collide_rect(self, enemy):
+                self.spaceship.health -= enemy.damage
+                enemies.remove(enemy)
+                all_sprites.remove(enemy)
+                print("Hit sound")
+                if self.spaceship.health < 1:
+                    print("Game over")
+
+
+class LaserSprite(BaseSprite):
+    def __init__(self, attack=1, cooldown=300, uses_count=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.attack = attack
+        self.cooldown = cooldown
+        self.uses_count = uses_count
+
     def update(self):
-        self.rect.y += self.asteroid_vel[1]
-        self.rect.x += self.asteroid_vel[0]
-        if self.rect.y > HEIGHT:
-            asteroids.remove(self)
+        self.rect.y -= laser_vel
+        if self.rect.y < 0 or self.rect.y > WINDOW_HEIGHT:
             all_sprites.remove(self)
+            lasers.remove(self)
 
-class BigAsteroid(BaseAsteroid):
-    def __init__(self):
-        super().__init__(big_asteroid_img, asteroid_width)
-        self.big_asteroid_health = big_asteroid_health
-    
+    @staticmethod
+    def play_fire_sound():
+        pygame.mixer.Channel(0).play(
+            pygame.mixer.Sound(f"{STATIC_DIR}/sounds/laser_sound.wav")
+        )
+
+    # doczytac o classmethods
+    def shoot(self, last_used):
+        now = pygame.time.get_ticks()
+        if now - last_used >= self.cooldown:
+            last_used = now
+            self.play_fire_sound()
+            lasers.append(self)
+            all_sprites.add(self)
+        return last_used
+
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, image, width, health, velocity_x, velocity_y, damage):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = image
+        self.rect = self.image.get_rect()
+        self.rect.center = (random.randrange(0, WINDOW_WIDTH - width), 0)
+        self.velocity_x = velocity_x
+        self.velocity_y = velocity_y
+        self.health = health
+        self.damage = damage
+        all_sprites.add(self)
+        enemies.add(self)
+
     def update(self):
-        self.rect.y += self.asteroid_vel[1]
-        self.rect.x += self.asteroid_vel[0]
-        if self.rect.y > HEIGHT:
-            big_asteroids.remove(self)
-            all_sprites.remove(self)
+        global kill_count
+        self.rect.x += self.velocity_x
+        self.rect.y += self.velocity_y
 
-class Boss(BaseAsteroid):
-    def __init__(self, boss_vel):
-        super().__init__(boss_image, boss_height)
-        self.boss_health = boss_health
-        self.boss_vel = boss_vel
-    def update(self):
-        if self.rect.y < HEIGHT/20:
-            self.rect.y += self.boss_vel
-        else:
-            self.rect.x += self.boss_vel
-            if self.rect.x + boss_width > WIDTH:
-                self.boss_vel *= -1
-            elif self.rect.x < 0:
-                self.boss_vel *= -1
+        if self.rect.y > WINDOW_HEIGHT:
+            self._remove_asteroid()
+        # Hit mark
+        for laser in lasers:
+            if pygame.sprite.collide_rect(self, laser):
+                laser_waste = self.health
+                self.health -= laser.attack
+                laser.attack -= laser_waste
+                if laser.attack < 1:
+                    lasers.remove(laser)
+                    all_sprites.remove(laser)
+                pygame.mixer.Channel(2).play(
+                    pygame.mixer.Sound(f"{STATIC_DIR}/sounds/asteroid_explosion.wav")
+                )
+                if self.health < 1:
+                    self._remove_asteroid()
+                    kill_count += 1
 
-class EnemiesFactory():
+    def _remove_asteroid(self):
+        enemies.remove(self)
+        all_sprites.remove(self)
+        # play destroy sound
+
+
+class EnemiesFactory:
     @staticmethod
     def get_enemy(enemy_type):
-        try:
-            if enemy_type == "asteroid":
-                if random.random() < 0.05 and len(asteroids) < 8:
-                    asteroid = Asteroid(asteroid_img, asteroid_width)
-                    asteroids.add(asteroid)
-                    all_sprites.add(asteroids)
-                    return asteroid
-            elif enemy_type == "big_asteroid":
-                if random.random() < 0.005 and len(big_asteroids) < 3 and asteroid_kill_count > 49:
-                    big_asteroid =  BigAsteroid()
-                    big_asteroids.add(big_asteroid)
-                    all_sprites.add(big_asteroid)
-                    return big_asteroid
-            elif enemy_type == "alien":
-                if random.random() < 0.001 and len(aliens) < 1 and asteroid_kill_count > 99:
-                    allien = Alien()
-                    aliens.append(allien)
-                    all_sprites.add(allien)
-                    if len(aliens) > 0:
-                        add_laser()
-                    return allien
-            elif enemy_type == "boss" and len(bosses) < 1 and random.random() < 0.0005:
-                boss = Boss(3)
-                global boss_spawned
-                bosses.append(boss)
-                boss_spawned = True
-                for boss in bosses:
-                    all_sprites.add(boss)
-                return Boss
-        #     raise AssertionError("Enemy dont found.")
-        except AssertionError as _e:
-            print(_e)
+        if enemy_type == "asteroid":
+            return Enemy(
+                image=asteroid_img,
+                width=asteroid_width,
+                health=1,
+                velocity_x=random.randrange(-1, 2),
+                velocity_y=random.randrange(2, 5),
+                damage=1,
+            )
+        elif enemy_type == "big asteroid":
+            if kill_count > 20:
+                return Enemy(
+                    image=big_asteroid_img,
+                    width=asteroid_width,
+                    health=2,
+                    velocity_x=random.randrange(-1, 2),
+                    velocity_y=random.randrange(1, 3),
+                    damage=1,
+                )
 
 
-def add_laser():
-    global laser_count
-    laser_count += 1
-    if len(lasers) < 10 and laser_count + 1 >= 60:
-        laser_count = 0
-        lasers.append(EnemyLaser())
-        for laser in lasers:
-            all_sprites.add(laser)
-
-def draw_text():
+def display_hud(player_health, screen):
+    font = pygame.font.SysFont("Arial", 30)
     health = str(player_health)
-    killed = str(asteroid_kill_count)
-    health_label = my_font.render('Health: ' + health, 1, WHITE)
+    killed = str(kill_count)
+    health_label = font.render('Health: ' + health, True, WHITE)
     screen.blit(health_label, (0, 0))
-    killed_label = my_font.render('Points: ' + killed, 1, WHITE)
-    screen.blit(killed_label, (0, HEIGHT/18))
-
-class Laser(pygame.sprite.Sprite):
-    def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = laser
-        self.rect = self.image.get_rect()
-        self.rect.center = player.rect.center
-    
-    def update(self):
-        global asteroid_kill_count
-        self.rect.y -= laser_vel
-        
-
-        for asteroid in asteroids:
-            if pygame.sprite.collide_rect(self, asteroid):
-                pygame.mixer.Channel(2).play(pygame.mixer.Sound('asteroid_explosion.wav'))
-                asteroids.remove(asteroid)
-                all_sprites.remove(asteroid)
-                all_sprites.remove(self) 
-                asteroid_kill_count += 100
-        
-        for asteroid in big_asteroids:
-            if pygame.sprite.collide_rect(self, asteroid):
-                asteroid.big_asteroid_health -= 1
-                all_sprites.remove(self)
-                if asteroid.big_asteroid_health < 1:
-                    pygame.mixer.Channel(2).play(pygame.mixer.Sound('asteroid_explosion.wav'))
-                    big_asteroids.remove(asteroid)
-                    all_sprites.remove(asteroid)
-                    asteroid_kill_count += 3
-                else:
-                    pygame.mixer.Channel(4).play(pygame.mixer.Sound('big_asteroid_hit.wav'))
-        
-        for alien in aliens:
-            if pygame.sprite.collide_rect(self, alien):
-                alien.alien_health -= 1
-                all_sprites.remove(self)
-                if alien.alien_health < 1:
-                    pygame.mixer.Channel(5).play(pygame.mixer.Sound('alien_killed.wav'))
-                    aliens.remove(alien)
-                    all_sprites.remove(alien)
-                    asteroid_kill_count += 10
-                else:
-                    pygame.mixer.Channel(5).play(pygame.mixer.Sound('alien_hit.wav'))
-        
-        for boss in bosses:
-            if pygame.sprite.collide_rect(self, boss):
-                boss.boss_health -= 1
-                all_sprites.remove(self)
-                if boss.boss_health < 1:
-                    pygame.mixer.Channel(6).play(pygame.mixer.Sound('boss_death.wav'))
-                    bosses.remove(boss)
-                    all_sprites.remove(boss)
-                    asteroid_kill_count += 1000
-                else:
-                    pygame.mixer.Channel(6).play(pygame.mixer.Sound('boss_hit.wav'))
-        
-        if self.rect.y < 0:
-            all_sprites.remove(self)
-
-class EnemyLaser(pygame.sprite.Sprite):
-    def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = pygame.Surface((enemy_laser_width,enemy_laser_height))
-        self.image.fill(GREEN)
-        self.rect = self.image.get_rect() 
-        if len(aliens) > 0:
-            self.rect.center = aliens[0].rect.center
-    
-    def update(self):
-        self.rect.y += laser_vel
-        
-        if self.rect.y > HEIGHT:
-            lasers.remove(self)
-            all_sprites.remove(self)
-
-class Alien(pygame.sprite.Sprite):
-    def __init__(self):
-        pygame.sprite.Sprite.__init__(self)
-        self.image = alien_sprites[0]
-        self.rect = self.image.get_rect()
-        if random.random() < 0.5:
-            self.rect.center = (0, HEIGHT/4)
-            self.alien_vel = alien_vel
-        else:
-            self.rect.center = (WIDTH, HEIGHT/4)
-            self.alien_vel = alien_vel * -1
-        self.alien_health = alien_health
-    
-    def update(self):
-        global alien_frame_count
-        self.rect.x += self.alien_vel
-        if self.rect.x > WIDTH or self.rect.x < -alien_width:
-            aliens.remove(self)
-            all_sprites.remove(self)
-        
-
-        alien_frame_count += 1
-        if alien_frame_count + 1 >= 60:
-            alien_frame_count = 0
-        self.image = alien_sprites[alien_frame_count//30]
-
-def game_over():
-    global player_health
-    game_over = True
-    pygame.mixer.Channel(3).play(pygame.mixer.Sound('game_over.wav'))
-    while game_over:
-        screen.fill(WHITE)
-        label = game_over_font.render('GAME OVER', 1, BLACK)
-        screen.blit(label, (WIDTH/3.7, HEIGHT/3))
-        score_label = game_over_font.render('Your Score: ' + str(asteroid_kill_count), 1, BLACK)
-        screen.blit(score_label, (WIDTH/4, HEIGHT/2.5))
-        screen.blit(pygame.transform.scale(pygame.image.load('alien_boss.png'), (600, 300)), (WIDTH/2 - 300, HEIGHT/2))
-        pygame.display.update()
-    
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit()
-
-def win():
-    global boss_death_count
-    boss_death_count += 1
-    if boss_death_count + 1 >= 150:
-        boss_death_count = 0
-        
-        win = True
-        while win:
-            screen.fill(WHITE)
-            label = win_font.render('YOU WON!', 1, BLACK)
-            score_label = win_font.render('Your Score: ' + str(asteroid_kill_count), 1, BLACK)
-            screen.blit(label, (WIDTH/2.9, HEIGHT/3))
-            screen.blit(score_label, (WIDTH/4, HEIGHT/2.5))
-            screen.blit(pygame.transform.scale(pygame.image.load('player_ship.png'), (300, 300)), (WIDTH/2 - 150, HEIGHT/2))
-            pygame.display.update()
-    
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit()
-            
-title_font = pygame.font.SysFont("Times New Roman", 100, bold=True)
-def title_screen():
-    intro = True
-    while intro:
-        screen.fill(WHITE)
-        text = 'Press Enter to Start'
-        label = title_font.render(text, 1, BLACK)
-        screen.blit(label, (WIDTH/4.2, HEIGHT/3))
-    
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit()
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_RETURN]:
-            intro = False
-        pygame.display.update()
-
-title_screen()
+    killed_label = font.render('Points: ' + killed, True, WHITE)
+    screen.blit(killed_label, (0, WINDOW_HEIGHT / 18))
 
 
-all_sprites = ObserverSpritesGroup(pygame.sprite.Group())
-all_sprites.add(Background1())
-all_sprites.add(Background2())
-player = Player()
-all_sprites.add(player)
+# class GameState:
+#     def __init__(self):
+#         self.state =  'main_gameplay'
+#
+#     def main_gameplay(self):
+
 
 def main():
-    global bosses
-    running = True
-    while running:
+    pygame.init()
+    screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+    pygame.display.set_caption("Space Shooter")
+    pygame.mixer.pre_init(44100, -16, 1, 512)  # prevents sound delay
+    clock = pygame.time.Clock()
+
+    # Background
+    all_sprites.add(Background((WINDOW_WIDTH / 2, WINDOW_HEIGHT / 2)))
+    all_sprites.add(Background((WINDOW_WIDTH / 2, -WINDOW_HEIGHT / 2)))
+    # Player spaceship
+    player_spaceship = BaseSpaceShip(health=3, vel=PLAYER_VELOCITY, cooldown=200)
+    player_sprite = PlayerSprite(
+        image=player_img,
+        rect_center=DEFAULT_PLAYER_RECT_CENTER,
+        spaceship=player_spaceship,
+    )
+    all_sprites.add(player_sprite)
+
+    enemies_factory = EnemiesFactory()
+
+    while 1:
         clock.tick(FPS)
+        all_sprites.draw(screen)
+        pygame.display.update()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
-            
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    pygame.mixer.Channel(0).play(pygame.mixer.Sound('laser_sound.wav'))
-                    all_sprites.add(Laser())
-        
-
+                return
+        # Spawn enemies
+        if len(enemies) < 5:
+            enemy = random.choices(["asteroid", "big asteroid"], [0.8, 0.2])
+            enemies_factory.get_enemy(enemy_type=enemy[0])
         all_sprites.update()
-        enemies_factory = EnemiesFactory()
-        enemies_factory.get_enemy(enemy_type='asteroid')
-        
-        if asteroid_kill_count > 49:
-            enemies_factory.get_enemy(enemy_type='big_asteroid')
+        enemies.update()
+        display_hud(player_health=player_sprite.spaceship.health, screen=screen)
+        pygame.display.update()
+        if player_sprite.spaceship.health < 1:
+            pygame.mixer.Channel(3).play(pygame.mixer.Sound(f'{STATIC_DIR}/sounds/game_over.wav'))
+            pygame.quit()
+            return
 
-        
-        if asteroid_kill_count > 99:
-            enemies_factory.get_enemy('alien')
-        
-        if asteroid_kill_count > 179 and not boss_spawned:
-            enemies_factory.get_enemy('boss')
 
-        if boss_spawned and len(bosses) < 1:
-            win()
-        
-        if player_health < 1:
-            game_over()
-        
-
-        fasade_display()
-        
-        
-
-    pygame.quit()
-
-def fasade_display():
-    """Fasade design pattern in function"""
-    all_sprites.draw(screen)
-    draw_text()
-    pygame.display.update()
-
-main()
+if __name__ == "__main__":
+    main()
